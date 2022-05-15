@@ -3,41 +3,15 @@ import pandas as pd
 # import numpy as np
 # import seaborn as sns
 import os
-from data_analysis import Nans_count #, data_collector
+from data_analysis import nans_count #, data_collector
 from tqdm import tqdm
 
 import warnings
 warnings.filterwarnings("ignore")
 
-
-# We will use this mean to replace missing ualues in the training and test set.
-def mean_imputation(patient: pd.DataFrame, missing: str):
-    mean_non_missing = patient[missing].mean()
-    missing_col = patient[missing]
-    missing_col.fillna(mean_non_missing, inplace=True)
-
-
-# We will use this median to replace missing ualues in the training and test set.
-def median_imputation(patient: pd.DataFrame, missing: str):
-    mean_non_missing = patient[missing].median()
-    missing_col = patient[missing]
-    missing_col.fillna(mean_non_missing, inplace=True)
-
-
-# Linear interpolation for missing data series
-def backward_fill_imputation(patient: pd.DataFrame, missing: str):
-    # missing_col = patient[missing]
-    # first_value = list(missing_col.isna()).index(True)
-    # if first_value > 0:
-    #     missing_col[missing_col.index < first_value] = first_value
-    # for
-    patient[missing].interpolate(limit_direction="both", inplace=True)
-    return patient
-
-
 def delete_cols(df: pd.DataFrame, tresh=95):
     remove = []
-    nans = Nans_count(df)
+    nans = nans_count(df)
     for feature in nans.keys():
         if nans[feature] > tresh:
             remove.append(feature)  # TODO there is a better way to do it since nans is ordered
@@ -56,52 +30,64 @@ def input_from_file(path, model):
         if model == 'baseline':
             df = df.iloc[idx]
         else:
-            df = df[1:idx + 1]  # TODO Maybe make all labels 1
+            df = df[1:idx + 1]
     elif model == 'baseline':
         df = df.iloc[-1]
     return df[1:]
+# TODO Remove if baseline part
 
 
 def get_input(directory: str, model='Advanced'):
     if directory not in ['train', 'test']:
         raise ValueError('Directory must be `train` or `test`.')
     input_df = pd.DataFrame()
-    for file in tqdm(os.scandir('data/' + directory)):
+    c=0
+    for file in tqdm(os.scandir('../Data/' + directory)):
         file_input = input_from_file(file, model=model)
         input_df = input_df.append(file_input)
-        if len(input_df) > 500:
-            break
+
     return input_df
 
 
-def clean_data(df: pd.DataFrame):
-    # df = data_collector(phase='train')
-    nulls = Nans_count(df)
-    df = delete_cols(df, tresh=98)
-    descb = pd.read_csv('Statistical_stuff.csv', index_col='Unnamed: 0')
+def clean_data(directory='train'):
+    df = get_input(directory)
+    nulls = nans_count(df)
+
+    if directory == 'train':
+        df = delete_cols(df, tresh=98)
+    else:
+        df = df[pd.read_csv('../Data/filled_train.csv').columns]
+    descb = pd.read_csv('../Data/Statistical_stuff.csv', index_col='Unnamed: 0')
     tresh_null, tresh_std = 70, 7.5
     for col in tqdm(df.columns):
-        for idx in df['id']:
+        for idx in df['id'].unique():
             patient = df[df['id'] == idx]
-            if 0 < nulls[col] < tresh_null:
-                filled_patient = backward_fill_imputation(patient, col)
-            else:
+
+            if all(patient[col].isna()):
                 if descb[col]['std'] < tresh_std:
-                    filled_patient = mean_imputation(patient, col)
+                    patient[col].fillna(descb[col]['mean'])
                 else:
-                    filled_patient = median_imputation(patient, col)
-            df[df['id'] == idx] = filled_patient
-    print()
+                    patient[col].fillna(descb[col]['50%'])
+
+            else:
+                if 0 < nulls[col] < tresh_null:
+                    patient[col].interpolate(limit_direction="both", inplace=True)
+                else:
+                    if descb[col]['std'] < tresh_std:
+                        mean_non_missing = patient[col].mean()
+                        patient[col].fillna(mean_non_missing, inplace=True)
+                    else:
+                        median_non_missing = patient[col].median()
+                        patient[col].fillna(median_non_missing, inplace=True)
+            df[df['id'] == idx] = patient
+    df.to_csv('filled_' + directory + '.csv', index=False)
+    return df
 
 
 def main():
-    df = get_input('train')
-    clean_df = clean_data(df)
-    print()
+    clean_df = clean_data('train', 'light')
+
 
 
 if __name__ == '__main__':
     main()
-
-# TODO decide which rows to fill with which method
-# TODO first row all nulls what we do with it

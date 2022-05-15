@@ -1,22 +1,24 @@
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
 import os
+from tqdm import tqdm
 
+import warnings
+warnings.filterwarnings("ignore")
 
 def data_collector(number_of_files=20000, phase='train'):
 
-    df = pd.read_csv("data/" + phase + "/patient_0.psv", sep='|')
+    df = pd.read_csv("../Data/" + phase + "/patient_0.psv", sep='|')
     df['id'] = 0  # TODO beware of test id
-    for i in range(1, number_of_files):
-        tmp = pd.read_csv("data/" + phase + "/patient_" + str(i) + ".psv", sep='|')
+    for i in tqdm(range(1, number_of_files)):
+        tmp = pd.read_csv("../Data/" + phase + "/patient_" + str(i) + ".psv", sep='|')
         tmp['id'] = i
         df = pd.concat([df, tmp])
 
     return df
 
 
-def Nans_count(df: pd.DataFrame):
+def nans_count(df: pd.DataFrame):
     percent_missing = df.isnull().sum() * 100 / len(df)
     nans = {k: v for k, v in sorted(percent_missing.to_dict().items(), key=lambda item: item[1], reverse=True)}
 
@@ -31,7 +33,7 @@ def histograms(df: pd.DataFrame, presets: list):
         plt.title('Histogram of:' + xlab)
         plt.xlabel(xlab)
         plt.ylabel('Count in data')
-        hist.savefig('Histogram of:' + col)  # TODO fuck your mom (somehow make it work)
+        hist.savefig('../Plots/Histogram of: ' + col)  # TODO fuck your mom (somehow make it work)
 
 
 def correlation(df: pd.DataFrame):
@@ -50,8 +52,8 @@ def feature_distribution(data: pd.DataFrame):
     # Each row is now a patient (not an hour)
     df_per_person = data.copy().drop_duplicates(subset=['id'], keep='last').astype({'Age': 'int'})
     descb = data.describe()
-    if not os.path.isfile('Statistical_stuff.csv'):
-        descb.to_csv('Statistical_stuff.csv')
+    if not os.path.isfile('../Data/Statistical_stuff.csv'):
+        descb.to_csv('../Data/Statistical_stuff.csv')
 
     # Sick vs Not sick
     # plot0 = plt.figure()
@@ -59,13 +61,13 @@ def feature_distribution(data: pd.DataFrame):
     # plot0.show()
     num_sick = df_per_person.groupby('SepsisLabel').size()
     plot0 = plt.figure()
-    plt.barh(df_per_person['SepsisLabel'].unique(), num_sick)
-    plt.title('Distribution of ages in data')
+    plt.barh(['Healthy', 'Sick'], num_sick.values)
+    plt.title('Illness prevalence')
     plt.xlabel('Sick or not')
     plt.ylabel('Count')
-    if os.path.isfile('figure0.png'):
-        os.remove('figure0.png')
-    plot0.savefig('figure0')
+    if os.path.isfile('../Plots/figure0.png'):
+        os.remove('../Plots/figure0.png')
+    plot0.savefig('../Plots/figure0')
     # count data by gender
     males_df = df_per_person[df_per_person['Gender'] == 1]
     females_df = df_per_person[df_per_person['Gender'] == 0]
@@ -79,25 +81,30 @@ def feature_distribution(data: pd.DataFrame):
     df_per_person['Agerange'] = pd.cut(df_per_person['Age'], bins, labels=labels, include_lowest=True)
     ages_sum = df_per_person.groupby('Agerange').size()
     plot1 = plt.figure()
-    plt.bar(labels, ages_sum.tolist(), color='blue')
+    plt.bar(labels, ages_sum.tolist())
     plt.title('Distribution of ages in data')
     plt.xlabel('Age groups')
     plt.ylabel('Count')
-    if os.path.isfile('figure1.png'):
-        os.remove('figure1.png')
-    plot1.savefig('figure1')
+    if os.path.isfile('../Plots/figure1.png'):
+        os.remove('../Plots/figure1.png')
+    plot1.savefig('../Plots/figure1')
 
+    # Chance of illness by age and gender
     plot2 = plt.figure()
-    males_sick_mean = males_df.groupby(['Age'])['SepsisLabel'].mean()
-    females_sick_mean = females_df.groupby(['Age'])['SepsisLabel'].mean()
-    plt.scatter(males_df['Age'].unique(), males_sick_mean, label='Male')
-    plt.scatter(females_df['Age'].unique(), females_sick_mean, label='Females')
-    plt.title('Sick patients given age and gender')
-    plt.xlabel('age')
-    plt.ylabel('Count')
-    if os.path.isfile('figure2.png'):
-        os.remove('figure2.png')
-    plot2.savefig('figure2')
+    males_df['Agerange'] = pd.cut(males_df['Age'], bins, labels=labels, include_lowest=True)
+    females_df['Agerange'] = pd.cut(females_df['Age'], bins, labels=labels, include_lowest=True)
+    males_sick_mean = males_df.groupby(['Agerange'])['SepsisLabel'].mean()
+    females_sick_mean = females_df.groupby(['Agerange'])['SepsisLabel'].mean()
+    plt.plot(sorted(males_df['Agerange'].unique()), males_sick_mean, label='Male')
+    plt.plot(sorted(females_df['Agerange'].unique()), females_sick_mean, label='Females')
+    plt.title('Chance for sickness for gender and age')
+    plt.xlabel('Age range')
+    plt.ylabel('Illness Chance')
+    plt.legend()
+    if os.path.isfile('../Plots/figure2.png'):
+        os.remove('../Plots/figure2.png')
+    plot2.savefig('../Plots/figure2')
+
 
     # histograms
     presets = [('HospAdmTime', 'Hospital Admission Times', 'blue'),
@@ -110,24 +117,40 @@ def feature_distribution(data: pd.DataFrame):
     #                       ['HR', 'Age', 'Temp', 'O2Sat', 'ICULOS', 'HospAdmTime', 'SepsisLabel']]]
 
     # TODO diff between sick genders
-    # TODO os.if_file_exists then replace it and shit to all the graphs
+
+
+def ratios(number_of_files, phase):
+    df = pd.read_csv("../Data/" + phase + "/patient_0.psv", sep='|').tail(1)
+    df['id'] = 0  # TODO beware of test id
+    for i in tqdm(range(1, number_of_files)):
+        tmp = pd.read_csv("../Data/" + phase + "/patient_" + str(i) + ".psv", sep='|').tail(1)
+        tmp['id'] = i
+        df = pd.concat([df, tmp])
+
+    men_df = df[df.Gender == 1]
+    women_df = df[df.Gender == 0]
+
+    print(f'{len(df[df.SepsisLabel == 1])/len(df)} of the patients are sick')
+    print(f'{len(men_df)/len(df)} of the patients are male')
+    print(f'{len(men_df[men_df.SepsisLabel == 1])/len(men_df)} of the male patients were sick')
+    print(f'{len(women_df[women_df.SepsisLabel == 1])/len(women_df)} of the female patients were sick')
 
 
 def dora_the_data_explorer():
 
-    head = pd.read_csv("data/train/patient_5.psv", sep='|', nrows=1)
-    print("Those are features in our dataset:", list(head.columns))
-    print("Number of features:", len(list(head.columns)))
+    # head = pd.read_csv("../Data/train/patient_0.psv", sep='|')
+    # print("Those are features in our dataset:", list(head.columns))
+    # print("Number of features:", len(list(head.columns)))
 
-    df = data_collector(1000, phase='train')
-    nans = Nans_count(df)
+    df = data_collector(20000, phase='train')
+    # ratios(20000, 'train')
+    # nans = nans_count(df)
     feature_distribution(df)
-    print(nans)
+    # print(nans)
 
 
 def main():
     dora_the_data_explorer()
-
 
 if __name__ == '__main__':
     main()
