@@ -10,7 +10,7 @@ from sklearn.preprocessing import RobustScaler
 class PatientDataset(Dataset):
     def __init__(self, data, labels):
         self.labels = labels
-        self.num_of_hours = data.shape[1]  # TODO data.shape(1)?
+        self.num_of_hours = data.shape[1]
         self.data = data
 
     def __len__(self):

@@ -14,7 +14,7 @@ def delete_cols(df: pd.DataFrame, tresh=95):
     nans = nans_count(df)
     for feature in nans.keys():
         if nans[feature] > tresh:
-            remove.append(feature)  # TODO there is a better way to do it since nans is ordered
+            remove.append(feature)
     print('The sum of the rows we removing from the data: ', df[[c for c in df.columns if c in remove]].notna().sum())
     print('Number of features removed: ', len(remove))
 
@@ -34,7 +34,6 @@ def input_from_file(path, model):
     elif model == 'baseline':
         df = df.iloc[-1]
     return df[1:]
-# TODO Remove if baseline part
 
 
 def get_input(directory: str, model='Advanced'):
